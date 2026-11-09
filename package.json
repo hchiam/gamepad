@@ -1,0 +1,8 @@
+{
+  "name": "gamepad",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "surge . hchiam-gamepad.surge.sh"
+  }
+}

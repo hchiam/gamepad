@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>gamepad demo</title>
+    <style>
+      :root {
+        --background: #ffffff;
+        --text: #1a1a1a;
+        --muted: #4a4a4a;
+        --card: #f3f4f6;
+        --border: #6b7280;
+        --pressed-background: #1d4ed8;
+        --pressed-text: #ffffff;
+        --dot: #b91c1c;
+        color-scheme: light dark;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --background: #111827;
+          --text: #f3f4f6;
+          --muted: #d1d5db;
+          --card: #1f2937;
+          --border: #9ca3af;
+          --pressed-background: #93c5fd;
+          --pressed-text: #111827;
+          --dot: #fca5a5;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 1rem;
+        background: var(--background);
+        color: var(--text);
+        font-family: system-ui, sans-serif;
+        font-size: 1.25rem;
+        line-height: 1.5;
+      }
+      main {
+        max-width: 60rem;
+        margin: 0 auto;
+      }
+      h1 {
+        margin-top: 0;
+      }
+      h2 {
+        font-size: 1.4rem;
+        margin: 0 0 0.5rem;
+      }
+      .hint {
+        color: var(--muted);
+      }
+      #players {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+        gap: 1rem;
+        padding: 0;
+        list-style: none;
+      }
+      .player {
+        background: var(--card);
+        border: 2px solid var(--border);
+        border-radius: 0.75rem;
+        padding: 1rem;
+      }
+      .stick-numbers {
+        margin: 0 0 0.75rem;
+        font-family: ui-monospace, monospace;
+        font-size: 1rem;
+        white-space: pre-wrap;
+      }
+      .controls {
+        margin: 0 0 0.75rem;
+        color: var(--muted);
+        overflow-wrap: anywhere;
+      }
+      .field {
+        position: relative;
+        height: 8rem;
+        border: 2px dashed var(--border);
+        border-radius: 0.5rem;
+        margin-bottom: 0.75rem;
+      }
+      .dot {
+        position: absolute;
+        width: 1.5rem;
+        height: 1.5rem;
+        border-radius: 50%;
+        background: var(--dot);
+      }
+      .buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+      .button {
+        border: 2px solid var(--border);
+        border-radius: 0.4rem;
+        padding: 0.1rem 0.5rem;
+        font-size: 1rem;
+      }
+      .remap {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 0.75rem;
+        font-size: 1rem;
+      }
+      .remap select,
+      .remap button {
+        font: inherit;
+        min-height: 2.75rem;
+        padding: 0.25rem 0.75rem;
+        border: 2px solid var(--border);
+        border-radius: 0.4rem;
+        background: var(--background);
+        color: var(--text);
+      }
+      .remap button {
+        cursor: pointer;
+      }
+      .remap select:focus-visible,
+      .remap button:focus-visible {
+        outline: 3px solid var(--pressed-background);
+        outline-offset: 2px;
+      }
+      .remap-status {
+        flex-basis: 100%;
+        margin: 0;
+        min-height: 1.5em;
+      }
+      .position-name {
+        font-size: 0.85rem;
+        opacity: 0.85;
+      }
+      .button.pressed {
+        background: var(--pressed-background);
+        color: var(--pressed-text);
+        border-color: var(--pressed-background);
+        font-weight: 700;
+      }
+      .button.pressed::before {
+        content: '● ';
+      }
+      #events {
+        font-family: ui-monospace, monospace;
+        font-size: 1rem;
+        padding-left: 1.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>gamepad demo</h1>
+      <p>
+        press any button on a controller to connect it. browsers hide controllers until a
+        button is pressed
+      </p>
+      <p class="hint" id="no-gamepads">no controllers connected yet</p>
+      <p role="status" id="announcer" style="position: absolute; left: -9999px"></p>
+
+      <ul id="players"></ul>
+
+      <h2>recent events</h2>
+      <ol id="events"></ol>
+    </main>
+
+    <script type="module">
+      import { Input, InputEvent, Button, Key, Stick, GameLoop, buttonLabel } from './input.js';
+
+      const keyboardControls = {
+        1: {
+          description: 'keyboard: W A S D to move',
+          buttonsByKeyCode: {
+            [Key.W]: Button.up,
+            [Key.A]: Button.left,
+            [Key.S]: Button.down,
+            [Key.D]: Button.right,
+          },
+        },
+        2: {
+          description: 'keyboard: arrow keys to move',
+          buttonsByKeyCode: {
+            [Key.ArrowUp]: Button.up,
+            [Key.ArrowLeft]: Button.left,
+            [Key.ArrowDown]: Button.down,
+            [Key.ArrowRight]: Button.right,
+          },
+        },
+      };
+
+      const input = new Input({
+        keyboard: Object.fromEntries(
+          Object.entries(keyboardControls).map(([player, { buttonsByKeyCode }]) => [player, buttonsByKeyCode]),
+        ),
+        gamepadProfiles: [
+          {
+            matches: /Vendor: 0079 Product: 0006/,
+            buttonByIndex: { 0: Button.north, 1: Button.east, 2: Button.south, 3: Button.west },
+          },
+        ],
+      });
+
+      const playersList = document.querySelector('#players');
+      const noGamepadsHint = document.querySelector('#no-gamepads');
+      const announcer = document.querySelector('#announcer');
+      const eventsList = document.querySelector('#events');
+      const maxEventsShown = 10;
+      const dotSpeedPixelsPerSecond = 150;
+      const positionByPlayer = new Map();
+      const controllerTypeByPlayer = new Map();
+
+      function words(camelCaseName) {
+        return camelCaseName.replace(/([A-Z])/g, ' $1').toLowerCase();
+      }
+
+      function formatStickValue(value) {
+        return value.toFixed(2).padStart(5);
+      }
+
+      function eventButtonText(player, button) {
+        const label = buttonLabel(button, controllerTypeByPlayer.get(player));
+        return label === button ? words(button) : `${label} (${words(button)})`;
+      }
+
+      function chipText(button, controllerType) {
+        const label = buttonLabel(button, controllerType);
+        if (label === button) return words(button);
+        return `${label} <span class="position-name">· ${words(button)}</span>`;
+      }
+
+      function plainButtonText(button, controllerType) {
+        const label = buttonLabel(button, controllerType);
+        return label === button ? words(button) : `${label} (${words(button)})`;
+      }
+
+      function wireRemapControls(card, player, controllerType) {
+        const targetSelect = card.querySelector('.remap-target');
+        const status = card.querySelector('.remap-status');
+        const startButton = card.querySelector('.remap-start');
+        let isWaitingForPress = false;
+        startButton.addEventListener('click', async () => {
+          if (isWaitingForPress) {
+            input.cancelNextPress(player);
+            return;
+          }
+          const target = targetSelect.value;
+          isWaitingForPress = true;
+          startButton.textContent = 'cancel';
+          status.textContent = `press the button that should act as ${plainButtonText(target, controllerType)}`;
+          const pressed = await input.nextPress(player);
+          isWaitingForPress = false;
+          startButton.textContent = 'choose a button';
+          if (!card.isConnected) return;
+          if (pressed === null) {
+            status.textContent = 'remap cancelled';
+            return;
+          }
+          input.remap(player, { [pressed]: target });
+          status.textContent = `${plainButtonText(pressed, controllerType)} now acts as ${plainButtonText(target, controllerType)}`;
+        });
+        card.querySelector('.remap-reset').addEventListener('click', () => {
+          input.resetRemap(player);
+          status.textContent = 'back to the default buttons';
+        });
+      }
+
+      function addPlayerCard(player, controlsDescription, controllerType) {
+        const card = document.createElement('li');
+        card.className = 'player';
+        card.dataset.player = player;
+        card.innerHTML = `
+          <h2>player ${player}</h2>
+          <p class="controls"></p>
+          <p class="stick-numbers" hidden></p>
+          <div class="field" aria-hidden="true"><div class="dot"></div></div>
+          <ul class="buttons" aria-label="buttons held by player ${player}">
+            ${Object.values(Button)
+              .map((button) => `<li class="button" data-button="${button}">${chipText(button, controllerType)}</li>`)
+              .join('')}
+          </ul>
+          <div class="remap">
+            <label>
+              remap
+              <select class="remap-target">
+                ${Object.values(Button)
+                  .map((button) => `<option value="${button}">${plainButtonText(button, controllerType)}</option>`)
+                  .join('')}
+              </select>
+            </label>
+            <button type="button" class="remap-start">choose a button</button>
+            <button type="button" class="remap-reset">reset</button>
+            <p class="remap-status" role="status"></p>
+          </div>`;
+        card.querySelector('.controls').textContent = controlsDescription;
+        wireRemapControls(card, player, controllerType);
+        playersList.append(card);
+        positionByPlayer.set(player, { x: 0, y: 0 });
+      }
+
+      function removePlayerCard(player) {
+        playersList.querySelector(`[data-player="${player}"]`)?.remove();
+        positionByPlayer.delete(player);
+      }
+
+      function setButtonShownAsPressed(player, button, isPressed) {
+        playersList
+          .querySelector(`[data-player="${player}"] [data-button="${button}"]`)
+          ?.classList.toggle('pressed', isPressed);
+      }
+
+      function logEvent(text) {
+        const item = document.createElement('li');
+        item.textContent = text;
+        eventsList.prepend(item);
+        while (eventsList.children.length > maxEventsShown) eventsList.lastChild.remove();
+      }
+
+      function updateNoGamepadsHint() {
+        const gamepadCount = playersList.querySelectorAll('.player.gamepad').length;
+        noGamepadsHint.hidden = gamepadCount > 0;
+      }
+
+      for (const [player, { description }] of Object.entries(keyboardControls)) {
+        addPlayerCard(Number(player), description);
+      }
+
+      input
+        .on(InputEvent.press, ({ player, button }) => {
+          setButtonShownAsPressed(player, button, true);
+          logEvent(`player ${player} pressed ${eventButtonText(player, button)}`);
+        })
+        .on(InputEvent.release, ({ player, button }) => {
+          setButtonShownAsPressed(player, button, false);
+          logEvent(`player ${player} released ${eventButtonText(player, button)}`);
+        })
+        .on(InputEvent.connect, ({ player, id, type }) => {
+          controllerTypeByPlayer.set(player, type);
+          addPlayerCard(player, `controller: ${id}`, type);
+          const gamepadCard = playersList.querySelector(`[data-player="${player}"]`);
+          gamepadCard.classList.add('gamepad');
+          gamepadCard.querySelector('.stick-numbers').hidden = false;
+          updateNoGamepadsHint();
+          announcer.textContent = `player ${player} connected a controller`;
+          logEvent(`player ${player} connected ${id}`);
+        })
+        .on(InputEvent.disconnect, ({ player, id }) => {
+          removePlayerCard(player);
+          controllerTypeByPlayer.delete(player);
+          updateNoGamepadsHint();
+          announcer.textContent = `player ${player} disconnected`;
+          logEvent(`player ${player} disconnected ${id}`);
+        });
+
+      new GameLoop((seconds) => {
+        const distance = dotSpeedPixelsPerSecond * seconds;
+        for (const [player, position] of positionByPlayer) {
+          const isEitherPressed = (...buttons) => buttons.some((button) => input.isPressed(player, button));
+          if (isEitherPressed(Button.left, Button.west)) position.x -= distance;
+          if (isEitherPressed(Button.right, Button.east)) position.x += distance;
+          if (isEitherPressed(Button.up, Button.north)) position.y -= distance;
+          if (isEitherPressed(Button.down, Button.south)) position.y += distance;
+          const stickLines = [];
+          for (const stick of Object.values(Stick)) {
+            const { x, y } = input.stick(player, stick);
+            position.x += x * distance;
+            position.y += y * distance;
+            stickLines.push(`${stick} stick: x ${formatStickValue(x)}, y ${formatStickValue(y)}`);
+          }
+          const stickNumbers = playersList.querySelector(`[data-player="${player}"] .stick-numbers`);
+          const stickText = stickLines.join('\n');
+          if (!stickNumbers.hidden && stickNumbers.textContent !== stickText) stickNumbers.textContent = stickText;
+
+          const field = playersList.querySelector(`[data-player="${player}"] .field`);
+          const dot = field.querySelector('.dot');
+          position.x = Math.max(0, Math.min(position.x, field.clientWidth - dot.offsetWidth));
+          position.y = Math.max(0, Math.min(position.y, field.clientHeight - dot.offsetHeight));
+          dot.style.transform = `translate(${position.x}px, ${position.y}px)`;
+        }
+      }).start();
+    </script>
+  </body>
+</html>
