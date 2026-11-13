@@ -123,7 +123,13 @@ localStorage.setItem('remap-1', JSON.stringify(input.remapOf(1))); // save, then
 
 [index.html](index.html) shows each player's held buttons, a dot that moves with the sticks and direction buttons (and, in the demo only, the face buttons too), a remap control on each card, and recent events
 
-serve this folder with any local static server and open it from `localhost`. opening `index.html` directly as a file won't work, because browsers block module imports from `file://`
+to run it locally:
+
+```bash
+npm start # runs python3 -m http.server 8000
+```
+
+then open <http://localhost:8000>. opening `index.html` directly as a file won't work, because browsers block module imports from `file://`
 
 to deploy the demo to <https://hchiam-gamepad.surge.sh> (needs the surge CLI, logged in):
 
