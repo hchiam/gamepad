@@ -604,13 +604,13 @@ connectedPads = [plusPairFirst, slashPairSecond];
 gamepadEvent('gamepadconnected', slashPairSecond);
 slashPairSecond.buttons[12].pressed = true;
 stepFrameAt(40000);
-check('L+R first, then (L/R): one player, and (L/R) is ignored', plusPairFirstLog, ['connect p1']);
+check('L+R first, then (L/R): two players (one per half), and (L/R) is ignored', plusPairFirstLog, ['connect p1', 'connect p2']);
 check('a console note explains the ignored duplicate', infos.at(-1), `ignoring gamepad "${slashPairId}" because the same Joy-Con pair is also listed as "Joy-Con L+R"`);
 connectedPads = [plusPairFirst];
 gamepadEvent('gamepaddisconnected', slashPairSecond);
 plusPairFirst.buttons[12].pressed = true;
 stepFrameAt(40016);
-check('an ignored entry disconnecting does not remove the player', plusPairFirstLog, ['connect p1', 'press p1 up']);
+check('an ignored entry disconnecting does not remove the players', plusPairFirstLog, ['connect p1', 'connect p2', 'press p1 north']);
 plusPairFirstInput.destroy();
 
 const slashPairFirst = standardPad(0, slashPairId);
@@ -627,7 +627,7 @@ slashPairFirst.buttons[12].pressed = true;
 stepFrameAt(41000);
 plusPairSecond.buttons[13].pressed = true;
 stepFrameAt(41016);
-check('(L/R) first, then L+R: same player, and L+R takes over input', slashPairFirstLog, ['connect p1', 'press p1 down']);
+check("(L/R) first, then L+R: (L/R)'s player is kept, one is added, and L+R takes over input", slashPairFirstLog, ['connect p1', 'connect p2', 'press p1 south']);
 slashPairFirstInput.destroy();
 
 const slashPairOnly = standardPad(0, slashPairId);
@@ -640,6 +640,58 @@ stepFrameAt(42000);
 check('(L/R) on its own is used normally', slashPairOnlyLog, ['press p1 up']);
 slashPairOnlyInput.destroy();
 connectedPads = [];
+
+
+
+
+console.log('\n--- split Joy-Con pair ---');
+
+
+
+const splitPair = standardPad(0, plusPairId);
+connectedPads = [splitPair];
+const splitInput = new Input();
+const splitLog = [];
+splitInput
+  .on(InputEvent.connect, ({ player }) => splitLog.push(`connect p${player}`))
+  .on(InputEvent.disconnect, ({ player }) => splitLog.push(`disconnect p${player}`))
+  .on(InputEvent.press, ({ player, button }) => splitLog.push(`press p${player} ${button}`));
+check('one L+R pad gives two players', splitLog, ['connect p1', 'connect p2']);
+
+function pressOnlyAndStep(pressedIndexes, time) {
+  splitPair.buttons.forEach((button, index) => (button.pressed = pressedIndexes.includes(index)));
+  splitLog.length = 0;
+  stepFrameAt(time);
+  return splitLog.filter((entry) => entry.startsWith('press'));
+}
+check('left half: arrows are face buttons, L is leftShoulder', pressOnlyAndStep([12, 13, 14, 15, 4], 43000), [
+  'press p1 leftShoulder',
+  'press p1 north',
+  'press p1 south',
+  'press p1 west',
+  'press p1 east',
+]);
+check('right half: B / A / Y / X are face buttons, R is leftShoulder', pressOnlyAndStep([0, 1, 2, 3, 5], 43016), [
+  'press p2 south',
+  'press p2 east',
+  'press p2 west',
+  'press p2 north',
+  'press p2 leftShoulder',
+]);
+splitPair.axes = [0.9, 0, 0, -0.9];
+stepFrameAt(43032);
+check('each half\'s stick is that player\'s Stick.left', [
+  splitInput.stick(1, Stick.left).x > 0.8,
+  splitInput.stick(2, Stick.left).y < -0.8,
+], [true, true]);
+splitLog.length = 0;
+connectedPads = [];
+gamepadEvent('gamepaddisconnected', splitPair);
+check('disconnecting the pad disconnects both players', splitLog.filter((entry) => entry.startsWith('disconnect')), [
+  'disconnect p1',
+  'disconnect p2',
+]);
+splitInput.destroy();
 
 
 

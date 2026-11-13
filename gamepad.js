@@ -33,7 +33,7 @@ const profiles = [
   { matches: /Joy-Con \(L\/R\)|Pro Controller/i, buttonByIndex: buttonByNintendoIndex },
 ];
 
-const axisIndexesByStick = Object.freeze({
+const standardAxisIndexesByStick = Object.freeze({
   [Stick.left]: { x: 0, y: 1 },
   [Stick.right]: { x: 2, y: 3 },
 });
@@ -60,6 +60,37 @@ function applyDeadzone(x, y, deadzone) {
 const preferredJoyConPairId = /Joy-Con L\+R/;
 const duplicateJoyConPairId = /Joy-Con \(L\/R\)/;
 
+// each Joy-Con half is always reported as a small standard controller (held upright),
+// regardless of whether it thinks it's a connected pair or separate,
+// so its only stick is Stick.left and its main shoulder is leftShoulder
+const joyConLeftHalf = {
+  buttonByIndex: {
+    12: Button.north,
+    13: Button.south,
+    14: Button.west,
+    15: Button.east,
+    4: Button.leftShoulder,
+    6: Button.leftTrigger,
+    8: Button.start,
+    10: Button.leftStickPress,
+  },
+  axisIndexesByStick: { [Stick.left]: { x: 0, y: 1 } },
+};
+const joyConRightHalf = {
+  buttonByIndex: {
+    0: Button.south,
+    1: Button.east,
+    2: Button.west,
+    3: Button.north,
+    5: Button.leftShoulder,
+    7: Button.leftTrigger,
+    9: Button.start,
+    11: Button.leftStickPress,
+    16: Button.home,
+  },
+  axisIndexesByStick: { [Stick.left]: { x: 2, y: 3 } },
+};
+
 export function listenToGamepads({
   playersTakenByKeyboard,
   press,
@@ -75,7 +106,7 @@ export function listenToGamepads({
     buttonByIndex: { ...buttonByStandardIndex, ...buttonByIndex },
   }));
   const profilesInPriorityOrder = [...customProfilesOnTopOfStandard, ...profiles];
-  const playerByGamepadIndex = new Map();
+  const playersByGamepadIndex = new Map();
   const restingAxesByGamepadIndex = new Map();
   const gamepadIdByIndex = new Map();
   const ignoredDuplicateGamepadIndexes = new Set();
@@ -88,21 +119,40 @@ export function listenToGamepads({
     );
   }
 
-  function lowestFreePlayer() {
-    const takenPlayers = new Set([...playersTakenByKeyboard, ...playerByGamepadIndex.values()]);
-    let player = 1;
-    while (takenPlayers.has(player)) player++;
-    return player;
+  function playerCountOf(gamepad) {
+    return preferredJoyConPairId.test(gamepad.id) ? 2 : 1;
   }
 
-  function trackGamepad(gamepad, player) {
-    playerByGamepadIndex.set(gamepad.index, player);
+  function playersFor(gamepad, playerNumbers) {
+    if (preferredJoyConPairId.test(gamepad.id)) {
+      return [
+        { player: playerNumbers[0], ...joyConLeftHalf },
+        { player: playerNumbers[1], ...joyConRightHalf },
+      ];
+    }
+    return [
+      { player: playerNumbers[0], buttonByIndex: buttonMapFor(gamepad), axisIndexesByStick: standardAxisIndexesByStick },
+    ];
+  }
+
+  function lowestFreePlayers(count, alsoTaken = []) {
+    const gamepadPlayers = [...playersByGamepadIndex.values()].flat().map(({ player }) => player);
+    const takenPlayers = new Set([...playersTakenByKeyboard, ...gamepadPlayers, ...alsoTaken]);
+    const freePlayers = [];
+    for (let player = 1; freePlayers.length < count; player++) {
+      if (!takenPlayers.has(player)) freePlayers.push(player);
+    }
+    return freePlayers;
+  }
+
+  function trackGamepad(gamepad, players) {
+    playersByGamepadIndex.set(gamepad.index, players);
     restingAxesByGamepadIndex.set(gamepad.index, restingAxesOf(gamepad));
     gamepadIdByIndex.set(gamepad.index, gamepad.id);
   }
 
   function untrackGamepad(gamepadIndex) {
-    playerByGamepadIndex.delete(gamepadIndex);
+    playersByGamepadIndex.delete(gamepadIndex);
     restingAxesByGamepadIndex.delete(gamepadIndex);
     gamepadIdByIndex.delete(gamepadIndex);
   }
@@ -117,7 +167,7 @@ export function listenToGamepads({
   }
 
   function addGamepad(gamepad) {
-    if (playerByGamepadIndex.has(gamepad.index) || ignoredDuplicateGamepadIndexes.has(gamepad.index)) return;
+    if (playersByGamepadIndex.has(gamepad.index) || ignoredDuplicateGamepadIndexes.has(gamepad.index)) return;
     if (duplicateJoyConPairId.test(gamepad.id) && isConnected(preferredJoyConPairId)) {
       ignoreDuplicate(gamepad.index, gamepad.id);
       return;
@@ -126,50 +176,54 @@ export function listenToGamepads({
       const duplicateIndex = [...gamepadIdByIndex].find(([, id]) => duplicateJoyConPairId.test(id))?.[0];
       if (duplicateIndex !== undefined) {
         const duplicateId = gamepadIdByIndex.get(duplicateIndex);
-        const player = playerByGamepadIndex.get(duplicateIndex);
+        const keptPlayers = playersByGamepadIndex.get(duplicateIndex).map(({ player }) => player);
         untrackGamepad(duplicateIndex);
         ignoreDuplicate(duplicateIndex, duplicateId);
-        trackGamepad(gamepad, player);
+        const addedPlayers = lowestFreePlayers(playerCountOf(gamepad) - keptPlayers.length, keptPlayers);
+        trackGamepad(gamepad, playersFor(gamepad, [...keptPlayers, ...addedPlayers]));
+        addedPlayers.forEach((player) => connect(player, gamepad.id));
         return;
       }
     }
-    const player = lowestFreePlayer();
-    trackGamepad(gamepad, player);
+    const players = playersFor(gamepad, lowestFreePlayers(playerCountOf(gamepad)));
+    trackGamepad(gamepad, players);
     if (gamepad.mapping !== 'standard') {
       console.warn(
         `this browser reports gamepad "${gamepad.id}" with a non-standard layout, so its buttons and sticks are ignored. a browser like Chrome may recognize it`,
       );
     }
-    connect(player, gamepad.id);
+    players.forEach(({ player }) => connect(player, gamepad.id));
     startPolling();
   }
 
   function removeGamepad(gamepad) {
     if (ignoredDuplicateGamepadIndexes.delete(gamepad.index)) return;
-    const player = playerByGamepadIndex.get(gamepad.index);
-    if (player === undefined) return;
+    const players = playersByGamepadIndex.get(gamepad.index);
+    if (players === undefined) return;
     untrackGamepad(gamepad.index);
-    disconnect(player, gamepad.id);
+    players.forEach(({ player }) => disconnect(player, gamepad.id));
   }
 
   function pollButtons() {
-    if (playerByGamepadIndex.size === 0) {
+    if (playersByGamepadIndex.size === 0) {
       animationFrameId = null;
       return;
     }
     for (const gamepad of navigator.getGamepads()) {
-      const player = playerByGamepadIndex.get(gamepad?.index);
-      if (player === undefined || gamepad.mapping !== 'standard') continue;
-      for (const [index, button] of Object.entries(buttonMapFor(gamepad))) {
-        if (gamepad.buttons[index]?.pressed) press(player, button);
-        else release(player, button);
-      }
+      const players = playersByGamepadIndex.get(gamepad?.index);
+      if (players === undefined || gamepad.mapping !== 'standard') continue;
       const restingAxes = restingAxesByGamepadIndex.get(gamepad.index) ?? [];
-      for (const [stick, axisIndexes] of Object.entries(axisIndexesByStick)) {
-        const centeredX = centeredAxis(gamepad.axes[axisIndexes.x] ?? 0, restingAxes[axisIndexes.x] ?? 0);
-        const centeredY = centeredAxis(gamepad.axes[axisIndexes.y] ?? 0, restingAxes[axisIndexes.y] ?? 0);
-        const { x, y } = applyDeadzone(centeredX, centeredY, stickDeadzone);
-        moveStick(player, stick, x, y);
+      for (const { player, buttonByIndex, axisIndexesByStick } of players) {
+        for (const [index, button] of Object.entries(buttonByIndex)) {
+          if (gamepad.buttons[index]?.pressed) press(player, button);
+          else release(player, button);
+        }
+        for (const [stick, axisIndexes] of Object.entries(axisIndexesByStick)) {
+          const centeredX = centeredAxis(gamepad.axes[axisIndexes.x] ?? 0, restingAxes[axisIndexes.x] ?? 0);
+          const centeredY = centeredAxis(gamepad.axes[axisIndexes.y] ?? 0, restingAxes[axisIndexes.y] ?? 0);
+          const { x, y } = applyDeadzone(centeredX, centeredY, stickDeadzone);
+          moveStick(player, stick, x, y);
+        }
       }
     }
     animationFrameId = requestAnimationFrame(pollButtons);
@@ -191,7 +245,7 @@ export function listenToGamepads({
     window.removeEventListener('gamepaddisconnected', onGamepadDisconnected);
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
-    playerByGamepadIndex.clear();
+    playersByGamepadIndex.clear();
     restingAxesByGamepadIndex.clear();
     gamepadIdByIndex.clear();
     ignoredDuplicateGamepadIndexes.clear();

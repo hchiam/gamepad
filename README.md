@@ -41,7 +41,7 @@ see [test-example-usage.js](test-example-usage.js) for a fuller example
 - browsers hide gamepads until a button is pressed on the page, so show "press any button"
 - gamepads get the lowest player number not used by keyboard players or other gamepads
 - only controllers the browser reports with the standard layout (`mapping: 'standard'`) are read for now. PS5, Xbox, and Joy-Con L+R in Chrome all do
-- Joy-Cons: use Chrome. Chrome combines a connected L+R pair into one player, and doesn't expose single Joy-Cons. Chrome on macOS may list the same pair twice (`Joy-Con L+R` and `Joy-Con (L/R)`), so the library uses only `Joy-Con L+R` and the pair stays one player. Firefox on macOS lists each Joy-Con separately but sends no input from them
+- Joy-Cons: use Chrome. a connected pair becomes two players, one per half, held upright. each half acts like a small controller: its stick is `Stick.left`, its 4 main buttons (arrows on the left half, A/B/X/Y on the right) are north / south / east / west, L/R is `leftShoulder`, ZL/ZR is `leftTrigger`, and minus/plus is `start`. Chrome on macOS may list the same pair twice (`Joy-Con L+R` and `Joy-Con (L/R)`), so the library uses only `Joy-Con L+R`. if only `Joy-Con (L/R)` is listed, the pair stays one player. Chrome doesn't expose single Joy-Cons, and Firefox on macOS lists each Joy-Con separately but sends no input from them
 - some keys aren't in `Key` on purpose: Control (Ctrl+W closes the tab, and Macs have no `ControlRight`) and Command / Windows (keys get stuck on Mac, and they trigger system shortcuts)
 
 ## buttons
