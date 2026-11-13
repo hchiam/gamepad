@@ -41,7 +41,7 @@
         line-height: 1.5;
       }
       main {
-        max-width: 60rem;
+        max-width: 80rem;
         margin: 0 auto;
       }
       h1 {
@@ -56,7 +56,7 @@
       }
       #players {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 30rem), 1fr));
         gap: 1rem;
         padding: 0;
         list-style: none;
@@ -74,7 +74,9 @@
         white-space: pre-wrap;
       }
       .controls {
-        margin: 0 0 0.75rem;
+        margin-left: 0.5rem;
+        font-size: 1rem;
+        font-weight: normal;
         color: var(--muted);
         overflow-wrap: anywhere;
       }
@@ -114,6 +116,10 @@
         margin-top: 0.75rem;
         font-size: 1rem;
       }
+      body:not(.show-button-presses) .buttons {
+        display: none;
+      }
+      h1 button,
       .remap select,
       .remap button {
         font: inherit;
@@ -124,9 +130,16 @@
         background: var(--background);
         color: var(--text);
       }
+      h1 button,
       .remap button {
         cursor: pointer;
       }
+      h1 button {
+        font-size: 1rem;
+        vertical-align: middle;
+        margin-left: 0.5rem;
+      }
+      h1 button:focus-visible,
       .remap select:focus-visible,
       .remap button:focus-visible {
         outline: 3px solid var(--pressed-background);
@@ -159,7 +172,10 @@
   </head>
   <body>
     <main>
-      <h1>gamepad demo</h1>
+      <h1>
+        gamepad demo
+        <button type="button" id="toggle-button-presses" aria-pressed="false">show button presses</button>
+      </h1>
       <p>
         press any button on a controller to connect it. browsers hide controllers until a
         button is pressed
@@ -212,6 +228,12 @@
       const playersList = document.querySelector('#players');
       const noGamepadsHint = document.querySelector('#no-gamepads');
       const announcer = document.querySelector('#announcer');
+      const toggleButtonPresses = document.querySelector('#toggle-button-presses');
+      toggleButtonPresses.addEventListener('click', () => {
+        const isShown = document.body.classList.toggle('show-button-presses');
+        toggleButtonPresses.setAttribute('aria-pressed', isShown);
+        toggleButtonPresses.textContent = isShown ? 'hide button presses' : 'show button presses';
+      });
       const eventsList = document.querySelector('#events');
       const maxEventsShown = 10;
       const dotSpeedPixelsPerSecond = 150;
@@ -280,8 +302,7 @@
         card.className = 'player';
         card.dataset.player = player;
         card.innerHTML = `
-          <h2>player ${player}</h2>
-          <p class="controls"></p>
+          <h2>player ${player} <span class="controls"></span></h2>
           <p class="stick-numbers" hidden></p>
           <div class="field" aria-hidden="true"><div class="dot"></div></div>
           <ul class="buttons" aria-label="buttons held by player ${player}">
