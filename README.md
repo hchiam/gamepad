@@ -42,6 +42,7 @@ see [test-example-usage.js](test-example-usage.js) for a fuller example
 - gamepads get the lowest player number not used by keyboard players or other gamepads
 - only controllers the browser reports with the standard layout (`mapping: 'standard'`) are read for now. PS5, Xbox, and Joy-Con L+R in Chrome all do
 - Joy-Cons: use Chrome. Chrome combines a connected L+R pair into one player, and doesn't expose single Joy-Cons. Firefox on macOS lists each Joy-Con separately but sends no input from them
+- some keys aren't in `Key` on purpose: Control (Ctrl+W closes the tab, and Macs have no `ControlRight`) and Command / Windows (keys get stuck on Mac, and they trigger system shortcuts)
 
 ## buttons
 

@@ -16,8 +16,6 @@ export const Key = Object.freeze({
   Tab: 'Tab',
   ShiftLeft: 'ShiftLeft',
   ShiftRight: 'ShiftRight',
-  ControlLeft: 'ControlLeft',
-  ControlRight: 'ControlRight',
   AltLeft: 'AltLeft',
   AltRight: 'AltRight',
 });
