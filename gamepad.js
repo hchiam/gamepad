@@ -92,6 +92,7 @@ const joyConRightHalf = {
 };
 
 // single Joy-Cons (2006 = left, 2007 = right), guessed to use the same button numbers as in a pair
+// to switch this off, set the list to []. to match other controller ids, edit the patterns below
 const singleJoyConHalves = [
   [/Joy-Con \(L\)|Product: 2006|^057e-2006-/i, joyConLeftHalf],
   [/Joy-Con \(R\)|Product: 2007|^057e-2007-/i, joyConRightHalf],
