@@ -181,6 +181,11 @@ export function listenToGamepads({
       ignoreDuplicate(gamepad.index, gamepad.id);
       return;
     }
+    const isSingleJoyCon = singleJoyConHalves.some(([idPattern]) => idPattern.test(gamepad.id));
+    if (isSingleJoyCon && isConnected(preferredJoyConPairId)) {
+      ignoreDuplicate(gamepad.index, gamepad.id);
+      return;
+    }
     if (preferredJoyConPairId.test(gamepad.id)) {
       const duplicateIndex = [...gamepadIdByIndex].find(([, id]) => duplicateJoyConPairId.test(id))?.[0];
       if (duplicateIndex !== undefined) {

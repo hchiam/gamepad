@@ -706,6 +706,24 @@ check('single Joy-Cons (Chrome and Firefox id formats) each use their half map',
 singleInput.destroy();
 connectedPads = [];
 
+const tripleSlashPair = standardPad(0, slashPairId);
+const triplePlusPair = standardPad(1, plusPairId);
+const tripleRightSingle = standardPad(2, 'Joy-Con (R) (STANDARD GAMEPAD Vendor: 057e Product: 2007)');
+connectedPads = [tripleSlashPair, triplePlusPair, tripleRightSingle];
+const tripleInput = new Input();
+const tripleLog = [];
+tripleInput
+  .on(InputEvent.connect, ({ player }) => tripleLog.push(`connect p${player}`))
+  .on(InputEvent.press, ({ player, button }) => tripleLog.push(`press p${player} ${button}`));
+tripleRightSingle.buttons[0].pressed = true;
+stepFrameAt(45000);
+check('(L/R), L+R, and (R) listed together: still two players, and the single (R) is ignored', tripleLog, [
+  'connect p1',
+  'connect p2',
+]);
+tripleInput.destroy();
+connectedPads = [];
+
 
 
 console.log('\n---------------------');
