@@ -217,6 +217,8 @@
       const dotSpeedPixelsPerSecond = 150;
       const positionByPlayer = new Map();
       const controllerTypeByPlayer = new Map();
+      const oneStickPlayers = new Set();
+      const joyConHalfId = /Joy-Con L\+R|Joy-Con \([LR]\)/;
 
       function words(camelCaseName) {
         return camelCaseName.replace(/([A-Z])/g, ' $1').toLowerCase();
@@ -344,6 +346,7 @@
         })
         .on(InputEvent.connect, ({ player, id, type }) => {
           controllerTypeByPlayer.set(player, type);
+          if (joyConHalfId.test(id)) oneStickPlayers.add(player);
           addPlayerCard(player, `controller: ${id}`, type);
           const gamepadCard = playersList.querySelector(`[data-player="${player}"]`);
           gamepadCard.classList.add('gamepad');
@@ -355,6 +358,7 @@
         .on(InputEvent.disconnect, ({ player, id }) => {
           removePlayerCard(player);
           controllerTypeByPlayer.delete(player);
+          oneStickPlayers.delete(player);
           updateNoGamepadsHint();
           announcer.textContent = `player ${player} disconnected`;
           logEvent(`player ${player} disconnected ${id}`);
@@ -373,7 +377,10 @@
             const { x, y } = input.stick(player, stick);
             position.x += x * distance;
             position.y += y * distance;
-            stickLines.push(`${stick} stick: x ${formatStickValue(x)}, y ${formatStickValue(y)}`);
+            const isOneStickPlayer = oneStickPlayers.has(player);
+            if (isOneStickPlayer && stick !== Stick.left) continue;
+            const stickName = isOneStickPlayer ? 'stick' : `${stick} stick`;
+            stickLines.push(`${stickName}: x ${formatStickValue(x)}, y ${formatStickValue(y)}`);
           }
           const stickNumbers = playersList.querySelector(`[data-player="${player}"] .stick-numbers`);
           const stickText = stickLines.join('\n');
