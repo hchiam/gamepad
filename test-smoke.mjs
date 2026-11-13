@@ -8,6 +8,8 @@ globalThis.cancelAnimationFrame = () => {};
 
 const warnings = [];
 console.warn = (message) => warnings.push(message);
+const infos = [];
+console.info = (message) => infos.push(message);
 
 let passes = 0;
 let failures = 0;
@@ -579,6 +581,65 @@ connectedPads = [];
 gamepadEvent('gamepaddisconnected', disconnectingPad);
 check('disconnect resolves a waiting nextPress() with null', await nextPressBeforeDisconnect, null);
 disconnectInput.destroy();
+
+
+
+
+console.log('\n--- duplicate Joy-Con pair ---');
+
+
+
+const plusPairId = 'Joy-Con L+R (STANDARD GAMEPAD Vendor: 057e Product: 200e)';
+const slashPairId = 'Joy-Con (L/R) (STANDARD GAMEPAD)';
+
+const plusPairFirst = standardPad(0, plusPairId);
+const slashPairSecond = standardPad(1, slashPairId);
+connectedPads = [plusPairFirst];
+const plusPairFirstInput = new Input();
+const plusPairFirstLog = [];
+plusPairFirstInput
+  .on(InputEvent.connect, ({ player }) => plusPairFirstLog.push(`connect p${player}`))
+  .on(InputEvent.press, ({ player, button }) => plusPairFirstLog.push(`press p${player} ${button}`));
+connectedPads = [plusPairFirst, slashPairSecond];
+gamepadEvent('gamepadconnected', slashPairSecond);
+slashPairSecond.buttons[12].pressed = true;
+stepFrameAt(40000);
+check('L+R first, then (L/R): one player, and (L/R) is ignored', plusPairFirstLog, ['connect p1']);
+check('a console note explains the ignored duplicate', infos.at(-1), `ignoring gamepad "${slashPairId}" because the same Joy-Con pair is also listed as "Joy-Con L+R"`);
+connectedPads = [plusPairFirst];
+gamepadEvent('gamepaddisconnected', slashPairSecond);
+plusPairFirst.buttons[12].pressed = true;
+stepFrameAt(40016);
+check('an ignored entry disconnecting does not remove the player', plusPairFirstLog, ['connect p1', 'press p1 up']);
+plusPairFirstInput.destroy();
+
+const slashPairFirst = standardPad(0, slashPairId);
+const plusPairSecond = standardPad(1, plusPairId);
+connectedPads = [slashPairFirst];
+const slashPairFirstInput = new Input();
+const slashPairFirstLog = [];
+slashPairFirstInput
+  .on(InputEvent.connect, ({ player }) => slashPairFirstLog.push(`connect p${player}`))
+  .on(InputEvent.press, ({ player, button }) => slashPairFirstLog.push(`press p${player} ${button}`));
+connectedPads = [slashPairFirst, plusPairSecond];
+gamepadEvent('gamepadconnected', plusPairSecond);
+slashPairFirst.buttons[12].pressed = true;
+stepFrameAt(41000);
+plusPairSecond.buttons[13].pressed = true;
+stepFrameAt(41016);
+check('(L/R) first, then L+R: same player, and L+R takes over input', slashPairFirstLog, ['connect p1', 'press p1 down']);
+slashPairFirstInput.destroy();
+
+const slashPairOnly = standardPad(0, slashPairId);
+connectedPads = [slashPairOnly];
+const slashPairOnlyInput = new Input();
+const slashPairOnlyLog = [];
+slashPairOnlyInput.on(InputEvent.press, ({ player, button }) => slashPairOnlyLog.push(`press p${player} ${button}`));
+slashPairOnly.buttons[12].pressed = true;
+stepFrameAt(42000);
+check('(L/R) on its own is used normally', slashPairOnlyLog, ['press p1 up']);
+slashPairOnlyInput.destroy();
+connectedPads = [];
 
 
 

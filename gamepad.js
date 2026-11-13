@@ -57,6 +57,9 @@ function applyDeadzone(x, y, deadzone) {
 }
 
 
+const preferredJoyConPairId = /Joy-Con L\+R/;
+const duplicateJoyConPairId = /Joy-Con \(L\/R\)/;
+
 export function listenToGamepads({
   playersTakenByKeyboard,
   press,
@@ -74,6 +77,8 @@ export function listenToGamepads({
   const profilesInPriorityOrder = [...customProfilesOnTopOfStandard, ...profiles];
   const playerByGamepadIndex = new Map();
   const restingAxesByGamepadIndex = new Map();
+  const gamepadIdByIndex = new Map();
+  const ignoredDuplicateGamepadIndexes = new Set();
   let animationFrameId = null;
 
   function buttonMapFor(gamepad) {
@@ -90,11 +95,46 @@ export function listenToGamepads({
     return player;
   }
 
-  function addGamepad(gamepad) {
-    if (playerByGamepadIndex.has(gamepad.index)) return;
-    const player = lowestFreePlayer();
+  function trackGamepad(gamepad, player) {
     playerByGamepadIndex.set(gamepad.index, player);
     restingAxesByGamepadIndex.set(gamepad.index, restingAxesOf(gamepad));
+    gamepadIdByIndex.set(gamepad.index, gamepad.id);
+  }
+
+  function untrackGamepad(gamepadIndex) {
+    playerByGamepadIndex.delete(gamepadIndex);
+    restingAxesByGamepadIndex.delete(gamepadIndex);
+    gamepadIdByIndex.delete(gamepadIndex);
+  }
+
+  function ignoreDuplicate(gamepadIndex, id) {
+    ignoredDuplicateGamepadIndexes.add(gamepadIndex);
+    console.info(`ignoring gamepad "${id}" because the same Joy-Con pair is also listed as "Joy-Con L+R"`);
+  }
+
+  function isConnected(idPattern) {
+    return [...gamepadIdByIndex.values()].some((id) => idPattern.test(id));
+  }
+
+  function addGamepad(gamepad) {
+    if (playerByGamepadIndex.has(gamepad.index) || ignoredDuplicateGamepadIndexes.has(gamepad.index)) return;
+    if (duplicateJoyConPairId.test(gamepad.id) && isConnected(preferredJoyConPairId)) {
+      ignoreDuplicate(gamepad.index, gamepad.id);
+      return;
+    }
+    if (preferredJoyConPairId.test(gamepad.id)) {
+      const duplicateIndex = [...gamepadIdByIndex].find(([, id]) => duplicateJoyConPairId.test(id))?.[0];
+      if (duplicateIndex !== undefined) {
+        const duplicateId = gamepadIdByIndex.get(duplicateIndex);
+        const player = playerByGamepadIndex.get(duplicateIndex);
+        untrackGamepad(duplicateIndex);
+        ignoreDuplicate(duplicateIndex, duplicateId);
+        trackGamepad(gamepad, player);
+        return;
+      }
+    }
+    const player = lowestFreePlayer();
+    trackGamepad(gamepad, player);
     if (gamepad.mapping !== 'standard') {
       console.warn(
         `this browser reports gamepad "${gamepad.id}" with a non-standard layout, so its buttons and sticks are ignored. a browser like Chrome may recognize it`,
@@ -105,10 +145,10 @@ export function listenToGamepads({
   }
 
   function removeGamepad(gamepad) {
+    if (ignoredDuplicateGamepadIndexes.delete(gamepad.index)) return;
     const player = playerByGamepadIndex.get(gamepad.index);
     if (player === undefined) return;
-    playerByGamepadIndex.delete(gamepad.index);
-    restingAxesByGamepadIndex.delete(gamepad.index);
+    untrackGamepad(gamepad.index);
     disconnect(player, gamepad.id);
   }
 
@@ -153,5 +193,7 @@ export function listenToGamepads({
     animationFrameId = null;
     playerByGamepadIndex.clear();
     restingAxesByGamepadIndex.clear();
+    gamepadIdByIndex.clear();
+    ignoredDuplicateGamepadIndexes.clear();
   };
 }
