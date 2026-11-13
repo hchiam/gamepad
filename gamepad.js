@@ -91,6 +91,12 @@ const joyConRightHalf = {
   axisIndexesByStick: { [Stick.left]: { x: 2, y: 3 } },
 };
 
+// single Joy-Cons (2006 = left, 2007 = right), guessed to use the same button numbers as in a pair
+const singleJoyConHalves = [
+  [/Joy-Con \(L\)|Product: 2006|^057e-2006-/i, joyConLeftHalf],
+  [/Joy-Con \(R\)|Product: 2007|^057e-2007-/i, joyConRightHalf],
+];
+
 export function listenToGamepads({
   playersTakenByKeyboard,
   press,
@@ -130,6 +136,8 @@ export function listenToGamepads({
         { player: playerNumbers[1], ...joyConRightHalf },
       ];
     }
+    const singleJoyConHalf = singleJoyConHalves.find(([idPattern]) => idPattern.test(gamepad.id))?.[1];
+    if (singleJoyConHalf) return [{ player: playerNumbers[0], ...singleJoyConHalf }];
     return [
       { player: playerNumbers[0], buttonByIndex: buttonMapFor(gamepad), axisIndexesByStick: standardAxisIndexesByStick },
     ];

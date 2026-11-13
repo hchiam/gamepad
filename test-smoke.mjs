@@ -262,9 +262,9 @@ const nintendoInput = new Input();
 const nintendoLog = [];
 nintendoInput.on(InputEvent.press, ({ player, button }) => nintendoLog.push(`press p${player} ${button}`));
 joyConPair.buttons[0].pressed = true;
-singleJoyCon.buttons[0].pressed = true;
+singleJoyCon.buttons[13].pressed = true;
 stepFrame();
-check('Joy-Con L+R button 0 (A, right) is east; single Joy-Con keeps standard south', nintendoLog, [
+check('Joy-Con (L/R) button 0 (A, right) is east; single Joy-Con (L) down arrow is south', nintendoLog, [
   'press p1 east',
   'press p2 south',
 ]);
@@ -692,6 +692,19 @@ check('disconnecting the pad disconnects both players', splitLog.filter((entry) 
   'disconnect p2',
 ]);
 splitInput.destroy();
+
+const singleLeft = standardPad(0, 'Joy-Con (L) (STANDARD GAMEPAD Vendor: 057e Product: 2006)');
+const singleRight = standardPad(1, '057e-2007-Joy-Con (R)');
+connectedPads = [singleLeft, singleRight];
+const singleInput = new Input();
+const singleLog = [];
+singleInput.on(InputEvent.press, ({ player, button }) => singleLog.push(`press p${player} ${button}`));
+singleLeft.buttons[13].pressed = true;
+singleRight.buttons[0].pressed = true;
+stepFrameAt(44000);
+check('single Joy-Cons (Chrome and Firefox id formats) each use their half map', singleLog, ['press p1 south', 'press p2 south']);
+singleInput.destroy();
+connectedPads = [];
 
 
 
